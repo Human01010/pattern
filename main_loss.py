@@ -588,3 +588,85 @@ try:
 
 except ValueError as e:
     print(e)
+
+import numpy as np
+from scipy.optimize import minimize
+from sklearn.base import BaseEstimator, ClassifierMixin
+from sklearn.metrics import classification_report, accuracy_score
+from sklearn.model_selection import train_test_split
+import matplotlib.pyplot as plt
+
+class CustomLogisticRegression(BaseEstimator, ClassifierMixin):
+    def __init__(self, penalty='l1', alpha=1.0, loss='cross', max_iter=1000, lambda_reg=0.1):
+        self.penalty = penalty
+        self.alpha = alpha
+        self.loss = loss
+        self.max_iter = max_iter
+        self.lambda_reg = lambda_reg
+        self.theta_ = None
+
+    def sigmoid(self, z):
+        return 1 / (1 + np.exp(-z))
+
+    def loss_function(self, theta, X, y):
+        m = len(y)
+        h = self.sigmoid(X @ theta)
+
+        # 确保所有变量都是 numpy 数组
+        theta = np.array(theta)
+        X = np.array(X)
+        y = np.array(y)
+        h = np.array(h)
+
+        # 损失函数部分
+        if self.loss == 'cross':
+            loss = - (1/m) * (y @ np.log(h) + (1 - y) @ np.log(1 - h))
+
+        # 正则化项
+        if self.penalty == 'l2':
+            reg = (self.alpha / (2 * m)) * np.sum(theta[1:] ** 2)
+        elif self.penalty == 'l1':
+            reg = (self.alpha / m) * np.sum(np.abs(theta[1:]))
+        else:
+            reg = 0
+        return loss + self.lambda_reg * reg  # 使用 lambda_reg 进行加权
+
+
+    def fit(self, X, y):
+        X = np.insert(X, 0, 1, axis=1)  # 添加偏置项
+        initial_theta = np.zeros(X.shape[1])
+
+        opt_results = minimize(
+            fun=self.loss_function,
+            x0=initial_theta,
+            args=(X, y),
+            method='L-BFGS-B',
+            options={'maxiter': self.max_iter}
+        )
+
+        self.theta_ = opt_results.x
+        return self
+
+    def predict_proba(self, X):
+        X = np.insert(X, 0, 1, axis=1)  # 添加偏置项
+        prob = self.sigmoid(X @ self.theta_)
+        return np.column_stack([1 - prob, prob])
+
+    def predict(self, X):
+        prob = self.predict_proba(X)[:, 1]
+        return (prob >= 0.5).astype(int)
+
+
+# 使用 PCA 处理后的数据进行训练和评估
+
+# 训练自定义逻辑回归模型
+custom_logistic_regression = CustomLogisticRegression(penalty='l1', loss='cross', max_iter=1000, alpha=1.0,lambda_reg=0.1)
+custom_logistic_regression.fit(X_train_pca, y_train_pca)
+
+# 使用自定义逻辑回归模型进行预测
+custom_logistic_pred_pca = custom_logistic_regression.predict(X_test_pca)
+
+# 评估自定义逻辑回归模型
+print("Custom Logistic Regression Classification Report with PCA:")
+print(classification_report(y_test_pca, custom_logistic_pred_pca))
+print("Custom Logistic Regression Accuracy with PCA:", accuracy_score(y_test_pca, custom_logistic_pred_pca))
